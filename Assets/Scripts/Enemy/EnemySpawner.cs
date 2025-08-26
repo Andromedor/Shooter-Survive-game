@@ -5,51 +5,54 @@ namespace Assets.Scripts
 {
     public class EnemySpawner : MonoBehaviour, IUpdatable
     {
-        [SerializeField] private GameObject[] _enemyPrefabs;
-        [SerializeField] private GameObject _healthBarPrefab;
-        [SerializeField] private Transform _canvasTransform;
-        [SerializeField] private float _spawnInterval = 2f;
-        private float _timer;
+        [SerializeField] private Enemy[] _enemyPrefabs;
+        [SerializeField] private HealthBar _healthBarPrefab;
+        [SerializeField] private Transform _uiCanvas; // Screen Space - Overlay
+        [SerializeField] private float _spawnInterval = 2.5f;
 
+        private float _timer;
+        private Camera _cam;
 
         private void Start()
         {
+            _cam = Camera.main;
             GameUpdateManager.Instance.Register(this);
         }
 
-        public void GameUpdate()
+        public void GameUpdate(float dt)
         {
-            _timer += Time.deltaTime;
+            _timer += dt;
             if (_timer >= _spawnInterval)
             {
                 _timer = 0f;
-                SpawnEnemy();
+                SpawnOne();
             }
         }
 
-        private void SpawnEnemy()
+        private void SpawnOne()
         {
-            int index = Random.Range(0, _enemyPrefabs.Length);
-            Vector2 spawnPos = GetRandomPositionInCamera();
-            GameObject enemy = Instantiate(_enemyPrefabs[index], spawnPos, Quaternion.identity);
+            if (_enemyPrefabs == null || _enemyPrefabs.Length == 0) return;
+            var prefab = _enemyPrefabs[Random.Range(0, _enemyPrefabs.Length)];
+            Vector3 pos = RandomPointInsideCamera(0.85f);
+            Enemy enemy = Instantiate(prefab, pos, Quaternion.identity);
 
-            HealthBar bar = Instantiate(_healthBarPrefab, _canvasTransform).GetComponent<HealthBar>();
-            bar.SetTarget(enemy.transform);
 
-            Enemy enemyComponent = enemy.GetComponent<Enemy>();
-            if (enemyComponent != null)
+            if (_healthBarPrefab != null && _uiCanvas != null)
             {
-                enemyComponent.HealthBar = bar;
+                HealthBar hb = Instantiate(_healthBarPrefab, _uiCanvas);
+                enemy.SetHealthBar(hb);
             }
         }
 
-        private Vector2 GetRandomPositionInCamera()
+        private Vector3 RandomPointInsideCamera(float margin = 0.9f)
         {
-            Camera cam = Camera.main;
-          
-            Vector2 min = cam.ViewportToWorldPoint(new Vector2(0.05f, 0.05f));
-            Vector2 max = cam.ViewportToWorldPoint(new Vector2(0.95f, 0.95f));
-            return new Vector2(Random.Range(min.x, max.x), Random.Range(min.y, max.y));
+            float m = Mathf.Clamp01(margin);
+            Vector3 min = _cam.ViewportToWorldPoint(new Vector3(1f - m, 1f - m, 0f));
+            Vector3 max = _cam.ViewportToWorldPoint(new Vector3(m, m, 0f));
+            // виправлення: краще явно з 0..1 з відступом
+            Vector3 p = _cam.ViewportToWorldPoint(new Vector3(Random.Range(0.05f, 0.95f), Random.Range(0.05f, 0.95f), 0f));
+            p.z = 0f;
+            return p;
         }
     }
 }

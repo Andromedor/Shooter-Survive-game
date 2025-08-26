@@ -7,44 +7,40 @@ namespace Assets.Scripts
 {
     public class HealthBar : MonoBehaviour, IUpdatable
     {
+        [SerializeField] private Slider _slider; // очікуємо 0..MaxHealth (int)
+        [SerializeField] private Vector3 _worldOffset = new Vector3(0, 1.1f, 0);
 
-        [SerializeField] private Slider _slider;
         private Transform _target;
-        private Vector3 _offset = new Vector3(0, 1.2f, 0);
-
-        public Action ActionDestroy;
 
         public void SetTarget(Transform target)
         {
             _target = target;
             GameUpdateManager.Instance.Register(this);
-            ActionDestroy += Destroy;
         }
 
-        public void SetMaxHealth(int maxHealth)
+        public void SetMaxHealth(int max)
         {
-            _slider.maxValue = maxHealth;
-            _slider.value = maxHealth;
+            if (_slider != null)
+            {
+                _slider.minValue = 0;
+                _slider.maxValue = max;
+            }
         }
 
-        public void SetHealth(int currentHealth)
+        public void SetHealth(int value)
         {
-            _slider.value = currentHealth;
+            if (_slider != null) _slider.value = value;
         }
 
-        public void GameUpdate()
+        public void GameUpdate(float dt)
         {
-            if (_target != null)
-                transform.position = Camera.main.WorldToScreenPoint(_target.position + _offset);
+            if (_target == null) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+            transform.position = cam.WorldToScreenPoint(_target.position + _worldOffset);
         }
 
-        private void Destroy()
-        {
-            ActionDestroy -= Destroy;
-            Destroy(gameObject);
-        }
-
-        private void OnDestroy()
+        private void OnDisable()
         {
             if (GameUpdateManager.Instance != null)
                 GameUpdateManager.Instance.Unregister(this);

@@ -6,44 +6,37 @@ namespace Assets.Scripts
 {
     public class BulletPool : MonoBehaviour
     {
-        [SerializeField] private GameObject _bulletPrefab;
-        [SerializeField] private int _poolSize = 20;
-
         public static BulletPool Instance;
-        private Queue<Bullet> _bullets = new();
+        [SerializeField] private Bullet _bulletPrefab;
+        private readonly Queue<Bullet> _pool = new();
 
-        private void Awake()
+
+        private void Awake() { Instance = this; }
+
+
+        public void Prewarm(int count)
         {
-            Instance = this;
-
-            for (int i = 0; i < _poolSize; i++)
+            for (int i = 0; i < count; i++)
             {
-                GameObject obj = Instantiate(_bulletPrefab);
-                obj.SetActive(false);
-                Bullet bullet = obj.GetComponent<Bullet>();
-                _bullets.Enqueue(bullet);
+                var b = Instantiate(_bulletPrefab);
+                b.gameObject.SetActive(false);
+                _pool.Enqueue(b);
             }
         }
 
-        public Bullet GetBullet()
+        public void Spawn(Vector3 pos, Vector3 dir, bool fromPlayer, int damage)
         {
-            if (_bullets.Count > 0)
-            {
-                Bullet bullet = _bullets.Dequeue();
-                bullet.gameObject.SetActive(true);
-                return bullet;
-            }
-            else
-            {
-                GameObject obj = Instantiate(_bulletPrefab);
-                return obj.GetComponent<Bullet>();
-            }
+            Bullet b = _pool.Count > 0 ? _pool.Dequeue() : Instantiate(_bulletPrefab);
+            b.transform.position = pos;
+            b.Activate(dir, fromPlayer, damage);
         }
 
-        public void ReturnBullet(Bullet bullet)
+
+        public void Recycle(Bullet bullet)
         {
+            GameUpdateManager.Instance.Unregister(bullet);
             bullet.gameObject.SetActive(false);
-            _bullets.Enqueue(bullet);
+            _pool.Enqueue(bullet);
         }
     }
 }

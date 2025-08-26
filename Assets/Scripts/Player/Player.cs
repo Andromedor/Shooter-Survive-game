@@ -1,81 +1,151 @@
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.Windows;
 namespace Assets.Scripts
 {
-    public class Player : MonoBehaviour, IEntity, IDamageable, IUpdatable
+    public class Player : MonoBehaviour, IEntity
     {
+        [Header("Stats")]
         [SerializeField] private int _maxHealth = 100;
         [SerializeField] private int _damage = 20;
         [SerializeField] private float _moveSpeed = 5f;
-        [SerializeField] private HealthBar _healthBar;
-        [SerializeField] private Transform _firePoint;
-        [SerializeField] private GameObject _bulletPrefab;
 
-        public int MaxHealth { get => _maxHealth; set { _maxHealth = value; } }
-        public int CurrentHealth { get => _currentHealth; set { _currentHealth = value; } }
-        public int Damage { get => _damage; set { _damage = value; } }
-        public float MoveSpeed { get => _moveSpeed; set { _moveSpeed = value; } }
-        public HealthBar HealthBar { get => _healthBar; set { _healthBar = value; } }
+
+        [Header("Shooting")]
+        [SerializeField] private Transform _firePoint;
+        [SerializeField] private float _fireCooldown = 0.15f;
+
 
         private int _currentHealth;
         private Vector2 _moveInput;
+        private float _shootTimer;
+        private Camera _cam;
+
+
+        // Input System
+        private PlayerInputActions _inputActions;
+
+
+        public int MaxHealth => _maxHealth;
+        public int CurrentHealth => _currentHealth;
+        public int Damage => _damage;
+        public float MoveSpeed => _moveSpeed;
+        public bool IsAlive => _currentHealth > 0;
+
+
+        private void Awake()
+        {
+            _inputActions = new PlayerInputActions();
+            _cam = Camera.main;
+        }
+
+        private void OnEnable()
+        {
+            _inputActions.Player.Enable();
+            _inputActions.Player.Move.performed += OnMove;
+            _inputActions.Player.Move.canceled += OnMove;
+            _inputActions.Player.Attack.performed += OnShoot;
+
+
+            GameUpdateManager.Instance.Register(this);
+            TargetRegistry.RegisterPlayer(this);
+        }
+
+        private void OnDisable()
+        {
+            _inputActions.Player.Move.performed -= OnMove;
+            _inputActions.Player.Move.canceled -= OnMove;
+            _inputActions.Player.Attack.performed -= OnShoot;
+            _inputActions.Player.Disable();
+
+
+            GameUpdateManager.Instance.Unregister(this);
+            TargetRegistry.UnregisterPlayer(this);
+        }
 
         private void Start()
         {
             _currentHealth = _maxHealth;
-            _healthBar.SetMaxHealth(_maxHealth);
-            GameUpdateManager.Instance.Register(this);
         }
 
-        public void GameUpdate()
+        private void OnMove(InputAction.CallbackContext ctx)
         {
+            _moveInput = ctx.ReadValue<Vector2>();
+        }
+
+        private void OnShoot(InputAction.CallbackContext ctx)
+        {
+            TryShoot();
+        }
+
+        public void GameUpdate(float dt)
+        {
+            if (!IsAlive) return;
+
             // Рух
-            float moveX = Input.GetAxisRaw("Horizontal");
-            float moveY = Input.GetAxisRaw("Vertical");
-            _moveInput = new Vector2(moveX, moveY).normalized;
+            Vector3 move = new Vector3(_moveInput.x, _moveInput.y, 0f).normalized;
+            if (move.sqrMagnitude > 0.001f)
+                transform.position += move * (_moveSpeed * dt);
 
-            if (_moveInput.sqrMagnitude > 0.01f)
+
+            // Обмеження межами камери
+            if (_cam != null)
             {
-                Vector3 move = new Vector3(_moveInput.x, _moveInput.y, 0f);
-                transform.position += move * _moveSpeed * Time.deltaTime;
+                Vector3 vp = _cam.WorldToViewportPoint(transform.position);
+                vp.x = Mathf.Clamp01(vp.x);
+                vp.y = Mathf.Clamp01(vp.y);
+                transform.position = _cam.ViewportToWorldPoint(vp);
+                transform.position = new Vector3(transform.position.x, transform.position.y, 0f);
             }
 
-            // Стрільба
-            if (Input.GetMouseButtonDown(0))
+            // Кулдаун стрільби
+            if (_shootTimer > 0f) 
             {
-                Shoot();
+                _shootTimer -= dt;
             }
         }
 
-        private void Shoot()
+        private void TryShoot()
         {
-            Vector3 mouseWorldPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            Vector3 direction = (mouseWorldPos - _firePoint.position);
-            direction.z = 0f;
-
-            // Ініціалізація кулі через пул
-            Bullet bullet = BulletPool.Instance.GetBullet();
-            bullet.transform.position = _firePoint.position;
-            bullet.Init(direction, "Enemy", Damage);
+            if (_shootTimer > 0f || _firePoint == null) return;
+            _shootTimer = _fireCooldown;
         }
 
         public void TakeDamage(int amount)
         {
             _currentHealth -= amount;
-            _currentHealth = Mathf.Clamp(_currentHealth, 0, _maxHealth);
-            _healthBar.SetHealth(_currentHealth);
-
-            if (_currentHealth <= 0)
-            {
-                Debug.Log("Player Dead");
-                // Можна викликати рестарт гри чи іншу логіку
-            }
+            if (_currentHealth < 0) _currentHealth = 0;
+            if (_currentHealth == 0) Die();
         }
 
-        private void OnDestroy()
+        private void Die()
         {
-            if (GameUpdateManager.Instance != null)
-                GameUpdateManager.Instance.Unregister(this);
+            // Простий рестарт: можна замінити на UI меню
+            gameObject.SetActive(false);
+            UnityEngine.SceneManagement.SceneManager.LoadScene(0);
         }
-
     }
 }
+
+//Vector3 moveDirection = Vector3.zero;
+//if (Input.GetKey(KeyCode.W)) moveDirection += Vector3.up;
+//if (Input.GetKey(KeyCode.S)) moveDirection += Vector3.down;
+//if (Input.GetKey(KeyCode.A)) moveDirection += Vector3.left;
+//if (Input.GetKey(KeyCode.D)) moveDirection += Vector3.right;
+
+//if (moveDirection != Vector3.zero)
+//{
+//    moveDirection.Normalize();
+//    transform.position += moveDirection * this.MoveSpeed * Time.deltaTime;
+//}
+
+//float moveX = Input.GetAxisRaw("Horizontal");
+//float moveY = Input.GetAxisRaw("Vertical");
+//_moveInput = new Vector2(moveX, moveY).normalized;
+
+//if (_moveInput.sqrMagnitude > 0.01f)
+//{
+//    Vector3 move = new Vector3(_moveInput.x, _moveInput.y, 0f);
+//    transform.position += move * _moveSpeed * Time.deltaTime;
+//}

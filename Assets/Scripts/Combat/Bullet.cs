@@ -4,45 +4,80 @@ namespace Assets.Scripts
 {
     public class Bullet : MonoBehaviour, IUpdatable
     {
-        [SerializeField] private int _damage = 10;
-        [SerializeField] private float _speed = 10f;
- 
-        private Vector2 _direction;
-        private string _targetTag;
-        private bool _initialized;
+        [SerializeField] private float _speed = 12f;
+        [SerializeField] private float _hitRadius = 0.28f;
+        [SerializeField] private float _maxLifetime = 5f;
 
-        public void Init(Vector2 direction, string targetTag, int damage)
+
+        private Vector3 _dir;
+        private bool _fromPlayer;
+        private int _damage;
+        private float _life;
+
+
+        public void Activate(Vector3 dir, bool fromPlayer, int damage)
         {
-            _direction = direction.normalized;
-            _targetTag = targetTag;
+            _dir = dir.normalized;
+            _fromPlayer = fromPlayer;
             _damage = damage;
-            _initialized = true;
+            _life = 0f;
             GameUpdateManager.Instance.Register(this);
+            gameObject.SetActive(true);
         }
 
-        public void GameUpdate()
-        {
-            if (!_initialized) return;
-            transform.position += (Vector3)_direction * _speed * Time.deltaTime;
-        }
 
-        private void OnTriggerEnter2D(Collider2D other)
+        public void GameUpdate(float dt)
         {
-            if (other.CompareTag(_targetTag))
+            transform.position += _dir * (_speed * dt);
+            _life += dt;
+
+
+            if (_life >= _maxLifetime || !IsVisibleOnScreen())
             {
-                IDamageable damageable = other.GetComponent<IDamageable>();
-                if (damageable != null)
-                    damageable.TakeDamage(_damage);
+                BulletPool.Instance.Recycle(this);
+                return;
+            }
 
-                Deactivate();
+
+            if (_fromPlayer)
+            {
+                var enemies = TargetRegistry.GetEnemies();
+                for (int i = 0; i < enemies.Count; i++)
+                {
+                    var e = enemies[i];
+                    if (!e.IsAlive) continue;
+                    Vector3 etf = ((MonoBehaviour)e).transform.position;
+                    if (Vector3.Distance(transform.position, etf) <= _hitRadius)
+                    {
+                        e.TakeDamage(_damage);
+                        BulletPool.Instance.Recycle(this);
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                var p = TargetRegistry.Player;
+                if (p != null)
+                {
+                    Vector3 ptf = ((MonoBehaviour)p).transform.position;
+                    if (Vector3.Distance(transform.position, ptf) <= _hitRadius)
+                    {
+                        p.TakeDamage(_damage);
+                        BulletPool.Instance.Recycle(this);
+                        return;
+                    }
+                }
             }
         }
 
-        private void Deactivate()
+
+        private bool IsVisibleOnScreen()
         {
-            _initialized = false;
-            GameUpdateManager.Instance.Unregister(this);
-            BulletPool.Instance.ReturnBullet(this);
+            var cam = Camera.main;
+            if (cam == null) return true;
+            Vector3 vp = cam.WorldToViewportPoint(transform.position);
+            return vp.x >= -0.1f && vp.x <= 1.1f && vp.y >= -0.1f && vp.y <= 1.1f; // трохи запасу
         }
     }
 }

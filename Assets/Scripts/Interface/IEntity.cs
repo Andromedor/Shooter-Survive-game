@@ -1,9 +1,11 @@
+using Assets.Scripts;
 using UnityEngine;
 
-public interface IEntity
+public interface IEntity : IDamageable, IUpdatable
 {
-    int MaxHealth { get; set; }
-    int CurrentHealth { get; set; }
-    int Damage { get; set; }
-    float MoveSpeed { get; set; }
+    int MaxHealth { get; }
+    int CurrentHealth { get; }
+    int Damage { get; }
+    float MoveSpeed { get; }
+    bool IsAlive { get; }
 }

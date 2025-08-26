@@ -10,45 +10,43 @@ namespace Assets.Scripts
         private static GameUpdateManager _instance;
         public static GameUpdateManager Instance => _instance;
 
-        private readonly List<IUpdatable> _updateables = new();
-
+        private static readonly List<IUpdatable> _updatables = new();
 
         private void Awake()
         {
             if (_instance == null)
             {
-                _instance = this;
-                //DontDestroyOnLoad(gameObject);
+                _instance = this; 
             }
             else
-            {
                 Destroy(gameObject);
-            }
         }
 
-        public void Register(IUpdatable updateable)
+        public void Register(IUpdatable updatable)
         {
-            if(!_updateables.Contains(updateable))
+            if (!_updatables.Contains(updatable))
             {
-                _updateables.Add(updateable);
-            }
+                _updatables.Add(updatable);
+            }         
         }
 
-        public void Unregister(IUpdatable updateable)
+        public void Unregister(IUpdatable updatable)
         {
-            if (_updateables.Contains(updateable))
+            if (_updatables.Contains(updatable))
             {
-                _updateables.Remove(updateable);
+                _updatables.Remove(updatable);
             }
         }
 
         // Update is called once per frame
         void Update()
         {
-            foreach (var updateable in _updateables)
+            float dt = Time.deltaTime;
+
+            for (int i = 0; i < _updatables.Count; i++)
             {
-               updateable.GameUpdate();
-            }
+                _updatables[i].GameUpdate(dt);
+            }     
         }
     }
 }

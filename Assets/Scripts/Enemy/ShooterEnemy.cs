@@ -5,40 +5,52 @@ namespace Assets.Scripts
 {
     public class ShooterEnemy : Enemy
     {
-        [SerializeField] private float _fireRate = 2f;
         [SerializeField] private Transform _firePoint;
+        [SerializeField] private float _fireRate = 1.5f;
+        private float _fireTimer;
 
-        private float _nextFireTime;
-        private Transform _player;
+
+        private Vector3 _roamTarget;
+
 
         protected override void Start()
         {
             base.Start();
-            _player = GameObject.FindGameObjectWithTag("Player").transform;
+            PickRoamTarget();
         }
 
-        public override void GameUpdate()
+
+        public override void GameUpdate(float dt)
         {
-            if (_player == null) return;
+            if (!IsAlive) return;
 
-            Vector2 direction = (_player.position - transform.position).normalized;
-            transform.position += (Vector3)direction * _moveSpeed * Time.deltaTime;
 
-            if (Time.time >= _nextFireTime)
+            // Рух до випадкової точки в межах камери
+            transform.position = Vector3.MoveTowards(transform.position, _roamTarget, _moveSpeed * dt);
+            if (Vector3.Distance(transform.position, _roamTarget) < 0.2f)
+                PickRoamTarget();
+
+
+            // Стрільба по гравцю
+            _fireTimer -= dt;
+            if (_fireTimer <= 0f && TargetRegistry.Player != null && _firePoint != null)
             {
-                Shoot();
-                _nextFireTime = Time.time + _fireRate;
+                _fireTimer = _fireRate;
+                Vector3 dir = (((MonoBehaviour)TargetRegistry.Player).transform.position - _firePoint.position).normalized;
+                BulletPool.Instance.Spawn(_firePoint.position, dir, false, _damage);
             }
         }
 
-        private void Shoot()
+        private void PickRoamTarget()
         {
-            Vector3 direction = (_player.position - _firePoint.position);
-            direction.z = 0f;
-
-            Bullet bullet = BulletPool.Instance.GetBullet();
-            bullet.transform.position = _firePoint.position;
-            bullet.Init(direction, "Player", _damage);
+            if (_cam == null) _cam = Camera.main;
+            Vector3 min = _cam.ViewportToWorldPoint(new Vector3(0.08f, 0.08f, 0f));
+            Vector3 max = _cam.ViewportToWorldPoint(new Vector3(0.92f, 0.92f, 0f));
+            _roamTarget = new Vector3(
+            Random.Range(min.x, max.x),
+            Random.Range(min.y, max.y),
+            0f
+            );
         }
     }
 }
